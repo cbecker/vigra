@@ -44,54 +44,6 @@
 
 namespace vigra {
 
-/** \defgroup MultiMathModule vigra::multi_math
-
-    Namespace <tt>vigra::multi_math</tt> holds VIGRA's support for efficient arithmetic and algebraic functions on multi-dimensional arrays (that is, \ref MultiArrayView and its subclasses). All <tt>multi_math</tt> functions operate element-wise. If you need matrix multiplication, use \ref LinearAlgebraModule instead.
-    
-    In order to avoid overload ambiguities, multi-array arithmetic must be explicitly activated by
-    \code
-    using namespace vigra::multi_math;
-    \endcode
-    (this should not be done globally, but only in the scope where the functionality is actually used).
-    
-    You can then use the standard operators in the expected way:
-    \code
-    MultiArray<2, float> i(Shape2(100, 100)), j(Shape2(100, 100));
-    
-    MultiArray<2, float> h  = i + 4.0 * j;
-                         h += (i.transpose() - j) / 2.0;
-    \endcode
-    etc. (supported operators are <tt>+ - * / ! ~ % && || == != &lt; &lt;= &gt; &gt;= &lt;&lt; &gt;&gt; & | ^ = += -= *= /=</tt>, with both scalar and array arguments). 
-    
-    Algebraic functions are available as well:
-    \code
-    h  = exp(-(sq(i) + sq(j)));
-    h *= atan2(-i, j);
-    \endcode
-    The following functions are implemented: <tt>abs, erf, even, odd, sign, signi, round, roundi, sqrt, sqrti, sq, 
-    norm, squaredNorm, gamma, loggamma, exp, log, log10, sin, sin_pi, cos, cos_pi, asin, acos, tan, atan, 
-    floor, ceil, conj, real, imag, arg, atan2, pow, fmod, min, max</tt>, 
-    provided the array's element type supports the respective function.
-    
-    Supported element types currently include the built-in numeric types, \ref TinyVector, \ref RGBValue, 
-    <tt>std::complex</tt>, and \ref FFTWComplex.
-
-    In addition, <tt>multi_math</tt> supports a number of functions that reduce arrays to scalars:
-    \code
-    double s = sum<double>(i);  // compute the sum of the elements, using 'double' as accumulator type
-    double p = product<double>(abs(i));  // compute the product of the elements' absolute values
-    
-    bool a = any(i < 0.0);  // check if any element of i is negative
-    bool b = all(i > 0.0);  // check if all elements of i are positive
-    \endcode
-    
-    Expressions are expanded so that no temporary arrays have to be created. To optimize cache locality,
-    loops are executed in the stride ordering of the left-hand-side array.
-    
-    <b>\#include</b> \<vigra/multi_math.hxx\>
-
-    Namespace: vigra::multi_math
-*/
 namespace multi_math {
 
 template <class ARG>
@@ -394,14 +346,12 @@ OPNAME(MultiMathOperand<T> const & v) \
 
 #define VIGRA_REALPROMOTE typename NumericTraits<T>::RealPromote
 
-#ifndef DOXYGEN  // doxygen gets confused by these macros
-
 VIGRA_MULTIMATH_UNARY_OPERATOR(Negate, -, operator-, T)
 VIGRA_MULTIMATH_UNARY_OPERATOR(Not, !, operator!, T)
 VIGRA_MULTIMATH_UNARY_OPERATOR(BitwiseNot, ~, operator~, T)
 
 using vigra::abs;
-VIGRA_MULTIMATH_UNARY_OPERATOR(Abs, vigra::abs, abs, typename NormTraits<T>::NormType)
+VIGRA_MULTIMATH_UNARY_OPERATOR(Abs, vigra::abs, abs, T)
 
 using vigra::erf;
 VIGRA_MULTIMATH_UNARY_OPERATOR(Erf, vigra::erf, erf, VIGRA_REALPROMOTE)
@@ -425,12 +375,11 @@ VIGRA_MULTIMATH_UNARY_OPERATOR(Cos_pi, vigra::cos_pi, cos_pi, VIGRA_REALPROMOTE)
 using vigra::gamma;
 VIGRA_MULTIMATH_UNARY_OPERATOR(Gamma, vigra::gamma, gamma, VIGRA_REALPROMOTE)
 
-using vigra::loggamma;
+using vigra::gamma;
 VIGRA_MULTIMATH_UNARY_OPERATOR(Loggamma, vigra::loggamma, loggamma, VIGRA_REALPROMOTE)
 
 VIGRA_MULTIMATH_UNARY_OPERATOR(Sqrt, std::sqrt, sqrt, VIGRA_REALPROMOTE)
-using vigra::exp;
-VIGRA_MULTIMATH_UNARY_OPERATOR(Exp, vigra::exp, exp, VIGRA_REALPROMOTE)
+VIGRA_MULTIMATH_UNARY_OPERATOR(Exp, std::exp, exp, VIGRA_REALPROMOTE)
 VIGRA_MULTIMATH_UNARY_OPERATOR(Log, std::log, log, VIGRA_REALPROMOTE)
 VIGRA_MULTIMATH_UNARY_OPERATOR(Log10, std::log10, log10, VIGRA_REALPROMOTE)
 VIGRA_MULTIMATH_UNARY_OPERATOR(Sin, std::sin, sin, VIGRA_REALPROMOTE)
@@ -445,9 +394,7 @@ VIGRA_MULTIMATH_UNARY_OPERATOR(Ceil, std::ceil, ceil, VIGRA_REALPROMOTE)
 VIGRA_MULTIMATH_UNARY_OPERATOR(Conj, conj, conj, T)
 VIGRA_MULTIMATH_UNARY_OPERATOR(Real, real, real, typename T::value_type)
 VIGRA_MULTIMATH_UNARY_OPERATOR(Imag, imag, imag, typename T::value_type)
-VIGRA_MULTIMATH_UNARY_OPERATOR(Arg, arg, arg, typename T::value_type)
 
-#endif //DOXYGEN
 
 #undef VIGRA_REALPROMOTE
 #undef VIGRA_MULTIMATH_UNARY_OPERATOR
@@ -502,8 +449,8 @@ struct MultiMathBinaryOperator
 
 // In the sequel, the nested type 'MultiMathOperand<T>::AllowOverload'
 // ensures that template functions only participate in overload
-// resolution when this type is defined, i.e. when T is a number 
-// or array type. It thus prevents 'ambiguous overload' errors.
+// resulution when this type is defined, i.e. when T is a number 
+// or array type. It thus prevents 'ambigous overload' errors.
 //
 #define VIGRA_MULTIMATH_BINARY_OPERATOR(NAME, FCT, OPNAME, SEP, RESTYPE) \
 \
@@ -724,7 +671,7 @@ struct MultiMath##NAME \
     template <class T, class Expression> \
     static void assign(T * data, Expression const & e) \
     { \
-        *data OP vigra::detail::RequiresExplicitCast<T>::cast(*e); \
+        *data OP (*e); \
     } \
 }; \
  \
@@ -755,7 +702,7 @@ void NAME##OrResize(MultiArray<N, T, A> & a, MultiMathOperand<Expression> const 
                                             a.strideOrdering(), e); \
 }
 
-VIGRA_MULTIMATH_ASSIGN(assign, =)
+VIGRA_MULTIMATH_ASSIGN(assign, = vigra::detail::RequiresExplicitCast<T>::cast)
 VIGRA_MULTIMATH_ASSIGN(plusAssign, +=)
 VIGRA_MULTIMATH_ASSIGN(minusAssign, -=)
 VIGRA_MULTIMATH_ASSIGN(multiplyAssign, *=)
@@ -800,7 +747,7 @@ struct MultiMathReduceAll
     template <class T, class Expression>
     static void assign(T * data, Expression const & e)
     {
-        *data = *data && (*e != NumericTraits<typename Expression::result_type>::zero());
+        *data = *data && *e;
     }
 };
 
@@ -809,16 +756,16 @@ struct MultiMathReduceAny
     template <class T, class Expression>
     static void assign(T * data, Expression const & e)
     {
-        *data = *data || (*e != NumericTraits<typename Expression::result_type>::zero());
+        *data = *data || *e;
     }
 };
 
 
 } // namespace detail
 
-template <class U, class T>
+template <class T, class U>
 U
-sum(MultiMathOperand<T> const & v, U res = NumericTraits<U>::zero()) 
+sum(MultiMathOperand<T> const & v, U res) 
 { 
     static const int ndim = MultiMathOperand<T>::ndim;
     typename MultiArrayShape<ndim>::type shape;
@@ -827,29 +774,15 @@ sum(MultiMathOperand<T> const & v, U res = NumericTraits<U>::zero())
     return res;
 }
 
-template <class U, unsigned int N, class T, class S>
+template <class T, class U>
 U
-sum(MultiArrayView<N, T, S> const & v, U res = NumericTraits<U>::zero()) 
-{ 
-    return v.sum<U>() + res;
-}
-
-template <class U, class T>
-U
-product(MultiMathOperand<T> const & v, U res = NumericTraits<U>::one()) 
+product(MultiMathOperand<T> const & v, U res) 
 { 
     static const int ndim = MultiMathOperand<T>::ndim;
     typename MultiArrayShape<ndim>::type shape;
     v.checkShape(shape);
     detail::MultiMathReduce<ndim, detail::MultiMathmultiplyAssign>::exec(res, shape, v);
     return res;
-}
-
-template <class U, unsigned int N, class T, class S>
-U
-product(MultiArrayView<N, T, S> const & v, U res = NumericTraits<U>::one()) 
-{ 
-    return v.product<U>() * res;
 }
 
 template <class T>

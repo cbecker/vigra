@@ -175,16 +175,9 @@ public:
         shouldEqual ((a3 [TinyVector <int, 4> (4, 0, 1, 0)]), 104);
     }
 
-    // subarray and diagonal tests
+    // subarray tests
     void test_subarray ()
     {
-        MultiArray<1, scalar_type> diagRef(Shape1(10));
-        linearSequence(diagRef.begin(), diagRef.end(), 0, 111);
-
-        MultiArrayView <1, scalar_type, StridedArrayTag> diag = array3.diagonal();
-        shouldEqual(diag.shape(0), 10);
-        shouldEqualSequence(diagRef.begin(), diagRef.end(), diag.begin());
-
         typedef difference3_type Shape;
         
         Shape offset (1,1,1);
@@ -203,7 +196,6 @@ public:
             shouldEqual(array3[k], k+100);
         for(int k=100; k<200; ++k)
             shouldEqual(array3[k], k-100);
-
     }
         
     // stridearray tests
@@ -322,23 +314,16 @@ public:
         should(!array3.all());
         should(array3.subarray(last, array3.shape()).all());
 
-        shouldEqual(array3.sum<int>(), 499500);
-        shouldEqual(array3.subarray(Shape3(1,1,1),Shape3(3,3,2)).product<int>(), 183521184);
-
-        Shape3 reducedShape(1, 1, array3.shape(2));
-        array3_type reducedSums(reducedShape);
-        array3.sum(reducedSums);
-        int res = 4950;
-        for(int k=0; k<reducedShape[2]; ++k, res += 10000)
-            shouldEqual(reducedSums(0,0,k), res);
+        shouldEqual(array3.sum(0), 499500);
+        shouldEqual(array3.subarray(Shape3(1,1,1),Shape3(3,3,2)).product(1), 183521184);
 
         scalar_type minimum, maximum;
-        array3.minmax(&minimum, &maximum);
+        array3.minmax(minimum, maximum);
         shouldEqual(minimum, 0);
         shouldEqual(maximum, array3.size()-1);
 
         double mean, variance;
-        array3.meanVariance(&mean, &variance);
+        array3.meanVariance(mean, variance);
         shouldEqual(mean, 499.5);
         shouldEqual(variance, 83333.25);
     }
@@ -1059,23 +1044,6 @@ public:
                 Navigator::iterator i = nav.begin(), end = nav.end();
                 for(; i != end; ++i, ++k)
                     shouldEqual(*i, expected[d][k]);
-            }
-        }
-        
-        Shape3 start(1, 1, 0), stop(3, 3, 2);
-        unsigned char sexpected[][8] = 
-            {{5,  6,  9, 10, 17, 18, 21, 22},
-            {5,  9,  6, 10, 17, 21, 18, 22},
-            {5, 17,  6, 18,  9, 21, 10, 22}};
-        for(int d=0; d<3; ++d)
-        {
-            Navigator nav(array3.traverser_begin(), start, stop, d);
-            int k = 0;
-            for(; nav.hasMore(); ++nav)
-            {
-                Navigator::iterator i = nav.begin(), end = nav.end();
-                for(; i != end; ++i, ++k)
-                    shouldEqual(*i, sexpected[d][k]);
             }
         }
     }
@@ -2138,12 +2106,7 @@ public:
         shouldEqualSequence(rv.begin(), rv.end(), r2.begin());
     
         shouldEqual(sum(b+0.5, 0.0), 300.0);
-        shouldEqual(sum<double>(b+0.5), 300.0);
-        shouldEqual(sum<double>(b), 288.0);
-
         shouldEqual(product(b.subarray(Shape3(1,0,0), Shape3(2,2,2))+0.5, 1.0), 3024.0);
-        shouldEqual(product<double>(b.subarray(Shape3(1,0,0), Shape3(2,2,2))+0.5), 3024.0);
-        shouldEqual(product<double>(MultiArray<3, float>(shape3)), 0.0);
 
         should(all(b > 0.0));
         should(!all(b > 10.0));
@@ -2159,9 +2122,8 @@ public:
         }
         catch(PreconditionViolation & e)
         {
-            std::string expected("\nPrecondition violation!\nmulti_math: shape mismatch in expression.\n"),
-                        actual(e.what());
-            shouldEqual(actual.substr(0, expected.size()), expected);
+            shouldEqual(std::string(e.what()), 
+                        std::string("\nPrecondition violation!\nmulti_math: shape mismatch in expression.\n"));
         }
     }
 
@@ -2381,43 +2343,31 @@ public:
     {
         using namespace vigra::multi_math;
         MultiArray<3, std::complex<double> > ac(a.shape());
-        ac.init(std::complex<double>(3.0, 4.0));
+        ac.init(std::complex<double>(2.0, 3.0));
 
         MultiArray<3, std::complex<double> > bc = conj(ac);
         for(int z=0; z<bc.shape(2); ++z)
             for(int y=0; y<bc.shape(1); ++y)
                 for(int x=0; x<bc.shape(0); ++x)
-                    shouldEqual(bc(x,y,z), std::complex<double>(3.0, -4.0));
+                    shouldEqual(bc(x,y,z), std::complex<double>(2.0, -3.0));
 
         bc = ac + ac;
         for(int z=0; z<bc.shape(2); ++z)
             for(int y=0; y<bc.shape(1); ++y)
                 for(int x=0; x<bc.shape(0); ++x)
-                    shouldEqual(bc(x,y,z), std::complex<double>(6.0, 8.0));
+                    shouldEqual(bc(x,y,z), std::complex<double>(4.0, 6.0));
 
         a = real(ac);
         for(int z=0; z<a.shape(2); ++z)
             for(int y=0; y<a.shape(1); ++y)
                 for(int x=0; x<a.shape(0); ++x)
-                    shouldEqual(a(x,y,z), 3.0);
+                    shouldEqual(a(x,y,z), 2.0);
 
         a = imag(ac);
         for(int z=0; z<a.shape(2); ++z)
             for(int y=0; y<a.shape(1); ++y)
                 for(int x=0; x<a.shape(0); ++x)
-                    shouldEqual(a(x,y,z), 4.0);
-
-        a = abs(ac);
-        for(int z=0; z<a.shape(2); ++z)
-            for(int y=0; y<a.shape(1); ++y)
-                for(int x=0; x<a.shape(0); ++x)
-                    shouldEqual(a(x,y,z), 5.0);
-
-        a = arg(ac);
-        for(int z=0; z<a.shape(2); ++z)
-            for(int y=0; y<a.shape(1); ++y)
-                for(int x=0; x<a.shape(0); ++x)
-                    shouldEqualTolerance(a(x,y,z), std::atan2(4.0, 3.0), 1e-16);
+                    shouldEqual(a(x,y,z), 3.0);
     }
 
 };
