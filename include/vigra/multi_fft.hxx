@@ -1,4 +1,4 @@
-/************************************************************************/
+    /************************************************************************/
 /*                                                                      */
 /*               Copyright 2009-2010 by Ullrich Koethe                  */
 /*                                                                      */
@@ -40,6 +40,10 @@
 #include "multi_array.hxx"
 #include "navigator.hxx"
 #include "copyimage.hxx"
+
+#ifdef _OPENMP
+    #include <omp.h>
+#endif
 
 namespace vigra {
 
@@ -1123,6 +1127,11 @@ class FFTWConvolvePlan
     FFTWPlan<N, Real> forward_plan, backward_plan;
     RArray realArray, realKernel;
     CArray fourierArray, fourierKernel;
+
+#ifdef _OPENMP  // many fourier kernel as threads, to speed up computation
+    std::vector<CArray> threadFourierKernels;
+#endif
+
     bool useFourierKernel;
 
   public:
@@ -1747,16 +1756,38 @@ FFTWConvolvePlan<N, Real>::executeManyComplexImpl(MultiArrayView<N, T, C1> in,
     detail::fftEmbedArray(in, fourierArray);
     forward_plan.execute(fourierArray, fourierArray);
 
-    for(; kernels != kernelsEnd; ++kernels, ++outs)
+#ifdef _OPENMP  // many fourier kernel as threads, to speed up computation
+    const int numThreads = omp_get_max_threads();
+    if (threadFourierKernels.size() != numThreads)
+        threadFourierKernels.resize(numThreads, fourierKernel);
+#endif
+
+    // read kernel + outputs and save them in order to let openmp work with the loop
+    std::vector<KernelArray *>  vecKernels;
+    std::vector<OutArray *>     vecOuts;
+    for (; kernels != kernelsEnd; ++kernels, ++outs) {
+        vecKernels.push_back( &(*kernels) );
+        vecOuts.push_back( &(*outs) );
+    }
+
+    #pragma omp parallel for num_threads(numThreads)
+    for(int i = 0; i < (int)vecKernels.size(); i++)
     {
+        std::cout << "Iteration " << i << std::endl;
+#ifndef _OPENMP
+        #define fourierKernel   fourierKernel
+#else
+        int curThread = omp_get_thread_num();
+        #define fourierKernel   (threadFourierKernels.at(curThread))
+#endif
         if(useFourierKernel)
         {
-            fourierKernel = *kernels;
+            fourierKernel = *vecKernels.at(i);
             moveDCToUpperLeft(fourierKernel);
         }
         else
         {
-            detail::fftEmbedKernel(*kernels, fourierKernel);
+            detail::fftEmbedKernel( *vecKernels.at(i), fourierKernel);
             forward_plan.execute(fourierKernel, fourierKernel);
         }
 
@@ -1764,8 +1795,9 @@ FFTWConvolvePlan<N, Real>::executeManyComplexImpl(MultiArrayView<N, T, C1> in,
         
         backward_plan.execute(fourierKernel, fourierKernel);
         
-        *outs = fourierKernel.subarray(left, right);
+        *vecOuts.at(i) = fourierKernel.subarray(left, right);
     }
+#undef fourierKernel
 }
 
 template <unsigned int N, class Real>
